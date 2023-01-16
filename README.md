@@ -67,7 +67,7 @@ If you load features/barcodes separately, you can either specify the path to the
 
 ```julia
 filepath_features = joinpath(basepath,"filtered_feature_bc_matrix/features.tsv.gz")
-filepath_features = joinpath(basepath,"filtered_feature_bc_matrix/barcodes.tsv.gz")
+filepath_barcodes = joinpath(basepath,"filtered_feature_bc_matrix/barcodes.tsv.gz")
 
 features2 = read10x_features(filepath_mtx)
 features3 = read10x_features(filepath_features)
