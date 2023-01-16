@@ -5,6 +5,9 @@ A Julia package for loading 10x Single Cell RNA-seq and antibody count data.
 It supports loading of 10x ".h5" files as well as text-based ".mtx" and ".tsv/.csv" files.
 The count matrix can be transposed at load time and the data types of the matrix and annotations can be chosen conveniently.
 
+More information on the file formats can be found in the [10x Genomics offical documentation](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/output/overview).
+Note that this is an independent implementation - any bugs you find should be reported here, not to 10x Genomics.
+
 
 ## Documentation
 The package should hopefully be straightforward to use.
@@ -14,7 +17,6 @@ See below for example usage. More detailed descriptions are in the docstrings of
 * `read10x_matrix`
 * `read10x_features`
 * `read10x_barcodes`
-
 
 
 ## Example usage
@@ -39,6 +41,7 @@ matrix2 = read10x_matrix(filepath)
 features2 = read10x_features(filepath)
 barcodes2 = read10x_barcodes(filepath)
 ```
+
 
 ### Sink types
 Per default, the matrix will be a `SparseMatrixCSC{Int,Int}`, features will be a `NamedTuple` where keys are column names and elements are column vectors, and barcodes a `Vector{String}`.
