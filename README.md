@@ -1,5 +1,9 @@
 # SingleCell10x.jl
 
+[![Build Status](https://github.com/rasmushenningsson/SingleCell10x.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/rasmushenningsson/SingleCell10x.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Coverage](https://codecov.io/gh/rasmushenningsson/SingleCell10x.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/rasmushenningsson/SingleCell10x.jl)
+
+
 A Julia package for loading 10x Single Cell RNA-seq and antibody count data.
 
 It supports loading of 10x ".h5" files as well as text-based ".mtx" and ".tsv/.csv" files.
