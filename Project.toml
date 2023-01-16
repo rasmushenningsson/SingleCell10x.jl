@@ -3,11 +3,18 @@ uuid = "eddce310-d14b-4c2d-aa06-cfe9e2f7af98"
 authors = ["Rasmus Henningsson <rasmus.henningsson@med.lu.se>"]
 version = "0.1.0"
 
+[deps]
+CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
 [compat]
-julia = "1"
+julia = "1.6"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 
 [targets]
-test = ["Test"]
+test = ["Test", "DataFrames"]
