@@ -167,11 +167,12 @@ end
             @test f==ans2
         end
 
-        @testset "gunzipped" begin
+        @testset "$(prefix)gunzipped" for prefix in ("","prefix_")
             mktempdir() do dir
-                m_unzipped_fn = joinpath(dir, basename(splitext(m_fn)[1]))
-                f_unzipped_fn = joinpath(dir, basename(splitext(f_fn)[1]))
-                b_unzipped_fn = joinpath(dir, basename(splitext(b_fn)[1]))
+                m_unzipped_fn = joinpath(dir, string(prefix,basename(splitext(m_fn)[1])))
+                f_unzipped_fn = joinpath(dir, string(prefix,basename(splitext(f_fn)[1])))
+                b_unzipped_fn = joinpath(dir, string(prefix,basename(splitext(b_fn)[1])))
+                @show m_unzipped_fn
                 gunzip(m_fn, m_unzipped_fn)
 
                 @test read10x_matrix(m_unzipped_fn) == expected_mat

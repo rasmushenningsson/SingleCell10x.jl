@@ -1,11 +1,6 @@
 const RawCSC{Tv,Ti} = Tuple{Vector{Ti},Vector{Ti},Vector{Tv},Int,Int}
 _transpose((I,J,V,P,N)::RawCSC) = (J,I,V,N,P)
 
-function _ismatrixmtx(fn)
-	fn = lowercase(basename(fn))
-	fn=="matrix.mtx" || fn=="matrix.mtx.gz"
-end
-
 _ish5(fn) = lowercase(splitext(fn)[2]) == ".h5"
 
 
@@ -140,7 +135,7 @@ _read10x_matrix(fn::AbstractString) = _open(_read10x_matrix, fn)
 	read10x_matrix(io, [matrixtype=SparseMatrixCSC{Int,Int}; transpose=false)
 
 Read 10x (CellRanger) count matrix.
-`io` can be filename (".h5" or ".mtx(.gz)") or an `HDF5.File` handle or an IO object.
+`io` can be filename (".h5" or ".mtx[.gz]") or an `HDF5.File` handle or an IO object.
 
 The returned count matrix is of type `matrixtype` and can be one of:
 * `SparseMatrixCSC` - The standard sparse matrix format in Julia, found in `SparseArrays`.
@@ -182,7 +177,7 @@ _read10x_matrix_metadata(fn::AbstractString) = _open(_read10x_matrix_metadata, f
 	read10x_matrix_metadata(io; transpose=false)
 
 Read 10x (CellRanger) count matrix metadata.
-`io` can be filename (".h5" or ".mtx(.gz)") or an `HDF5.File` handle or an IO object.
+`io` can be filename (".h5" or ".mtx[.gz]") or an `HDF5.File` handle or an IO object.
 
 Returns `(P,N,nnz)` the height, width and number of nonzero entries of the count matrix.
 
@@ -198,11 +193,13 @@ end
 
 
 function _guessfilename(filename::AbstractString, names::Tuple, description)
-	_ismatrixmtx(filename) || return filename
 	dir,base = splitdir(filename)
 
+	pattern = r"matrix\.mtx(\.gz)?$"
+	occursin(pattern, base) || return filename
+
 	for name in names, ext in (".tsv.gz", ".tsv", ".csv.gz", ".csv")
-		fn = joinpath(dir, string(name,ext))
+		fn = joinpath(dir, replace(base, pattern=>string(name,ext)))
 		isfile(fn) && return fn
 	end
 
@@ -254,7 +251,7 @@ _barcodes(fun, b) = fun(b)
 	read10x_barcodes(io, [barcodetype=Vector]; [guess, delim])
 
 Read 10x barcodes.
-`io` can be a filename (".h5", ".tsv(.gz)", ".csv(.gz)" or "matrix.mtx(.gz)") or an `HDF5.File` handle or an IO object.
+`io` can be a filename (".h5", ".tsv[.gz]", ".csv[.gz]" or "[prefix]matrix.mtx[.gz]") or an `HDF5.File` handle or an IO object.
 
 The returned annotation object for barcodes is of the type `barcodetype` and can be one of:
 * Vector - With barcode values for each cell.
@@ -263,7 +260,7 @@ The returned annotation object for barcodes is of the type `barcodetype` and can
 * Other table types that can be constructed from NamedTuples.
 * A user defined function/type constructor taking a NamedTuple as input.
 
-If the input filename is "matrix.mtx(.gz)", then the same folder will be searched for a matching barcode file.
+If the input filename is "[prefix]matrix.mtx[.gz]", then the same folder will be searched for a matching barcode file.
 Set `guess=nothing` to disable. `guess` can also be set to a function taking the matrix file path as input and returning the corresponding barcode file path.
 
 The column delimiter `delim` will be detected from the file name if not specifed.
@@ -318,7 +315,7 @@ _features(fun, f) = fun(f)
 	read10x_features(io, [featuretype=NamedTuple]; [guess, delim])
 
 Read 10x features.
-`io` can be a filename (".h5", ".tsv(.gz)", ".csv(.gz)" or ".mtx(.gz)") or an `HDF5.File` handle or an IO object.
+`io` can be a filename (".h5", ".tsv[.gz]", ".csv[.gz]" or ".mtx[.gz]") or an `HDF5.File` handle or an IO object.
 
 The returned annotation table for features is of the type `featuretype` and can be one of:
 * NamedTuple - With column names as keys and column vectors as values.
@@ -326,7 +323,7 @@ The returned annotation table for features is of the type `featuretype` and can 
 * Other table types that can be constructed from NamedTuples.
 * A user defined function/type constructor taking a NamedTuple as input.
 
-If the input filename is "matrix.mtx(.gz)", then the same folder will be searched for a matching feature file.
+If the input filename is "[prefix]matrix.mtx[.gz]", then the same folder will be searched for a matching feature file.
 Set `guess=nothing` to disable. `guess` can also be set to a function taking the matrix file path as input and returning the corresponding feature file path.
 
 The column delimiter `delim` will be detected from the file name if not specifed.
@@ -385,8 +382,8 @@ end
 	        transpose=false, [features, barcodes, delim])
 
 Read 10x (CellRanger) count matrix and annotations.
-`io` can be filename (".h5" or "matrix.mtx(.gz)") or an `HDF5.File` handle.
-NB: If the input filename is "matrix.mtx(.gz)", the same folder will be searched for matching feature and barcode files.
+`io` can be filename (".h5" or "[prefix]matrix.mtx[.gz]") or an `HDF5.File` handle.
+NB: If the input filename is "[prefix]matrix.mtx[.gz]", the same folder will be searched for matching feature and barcode files.
 
 The returned count matrix is of type `matrixtype` and can be one of:
 * `SparseMatrixCSC` - The standard sparse matrix format in Julia, found in `SparseArrays`.
@@ -403,7 +400,7 @@ The returned annotations for barcodes/features are of types `barcodetype`/`featu
 
 If `transpose` is `true`, the data matrix will be read transposed.
 
-`features` and `barcodes` are only allowed for `mtx(.gz)` files.
+`features` and `barcodes` are only allowed for `mtx[.gz]` files.
 They can be used to specify the file paths for `features`/`barcodes`.
 By default, the file paths will be autodetected.
 Set to `nothing` to disable.
