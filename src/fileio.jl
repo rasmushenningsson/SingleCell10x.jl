@@ -6,6 +6,8 @@ function _ismatrixmtx(fn)
 	fn=="matrix.mtx" || fn=="matrix.mtx.gz"
 end
 
+_ish5(fn) = lowercase(splitext(fn)[2]) == ".h5"
+
 
 """
 	_open(f::Function, filename::AbstractString)
@@ -27,14 +29,10 @@ function _open(f::Function, filename::AbstractString)
 	end
 end
 
-function _delimkwarg(filename::AbstractString)
+function _delim(filename::AbstractString)
 	fn,ext = splitext(lowercase(filename))
-	ext == ".h5" && return (;)
-	if ext==".gz"
-		fn,ext=splitext(fn)
-	end
-	ext == ".csv" && return (;delim=',')
-	(;delim='\t')
+	ext == ".gz" && _delim(fn)
+	ext == ".csv" ? ',' : '\t'
 end
 
 
@@ -213,6 +211,9 @@ function _guessfilename(filename::AbstractString, names::Tuple, description)
 end
 
 
+guessfeaturefilename(fn) = _guessfilename(fn, ("features","genes"), "feature")
+guessbarcodefilename(fn) = _guessfilename(fn, ("barcodes",), "barcode")
+
 
 
 function _read10x_barcodes(io::HDF5.File)
@@ -223,16 +224,24 @@ function _read10x_barcodes(io; delim)
 	@assert size(barcodes,2)==1
 	barcode=vec(barcodes)
 end
+_read10x_barcodes(fn::AbstractString; kwargs...) = _open(fn) do io
+	_read10x_barcodes(io; kwargs...)
+end
 
-function _read10x_barcodes(fn::AbstractString; guessfilename=true, kwargs...)
-	if guessfilename
-		fn = _guessfilename(fn, ("barcodes",), "barcode")
-	end
 
-	_open(fn) do io
-		_read10x_barcodes(io; _delimkwarg(fn)..., kwargs...)
+_read10x_barcodes_autodetect(io;kwargs...) = _read10x_barcodes(io;kwargs...)
+function _read10x_barcodes_autodetect(filename::AbstractString; kwargs...)
+	if _ish5(filename)
+		_read10x_barcodes(filename; kwargs...)
+	else
+		_read10x_barcodes_triplet(filename; kwargs...)
 	end
 end
+function _read10x_barcodes_triplet(filename; guess=guessbarcodefilename, kwargs...)
+	fn = _filename(guess,filename)
+	_read10x_barcodes(fn; delim=_delim(fn), kwargs...)
+end
+
 
 
 _barcodes(::Type{T}, b) where T = T((;barcode=b))
@@ -242,7 +251,7 @@ _barcodes(fun, b) = fun(b)
 
 
 """
-	read10x_barcodes(io, [barcodetype=Vector]; delim, guessfilename=true)
+	read10x_barcodes(io, [barcodetype=Vector]; [guess, delim])
 
 Read 10x barcodes.
 `io` can be a filename (".h5", ".tsv(.gz)", ".csv(.gz)" or "matrix.mtx(.gz)") or an `HDF5.File` handle or an IO object.
@@ -254,14 +263,16 @@ The returned annotation object for barcodes is of the type `barcodetype` and can
 * Other table types that can be constructed from NamedTuples.
 * A user defined function/type constructor taking a NamedTuple as input.
 
-The column delimiter `delim` will be guessed from the file name if not specifed.
+If the input filename is "matrix.mtx(.gz)", then the same folder will be searched for a matching barcode file.
+Set `guess=nothing` to disable. `guess` can also be set to a function taking the matrix file path as input and returning the corresponding barcode file path.
 
-If `guessfilename` is true and the input filename is "matrix.mtx(.gz)", then the same folder will be searched for a matching barcode file.
+The column delimiter `delim` will be detected from the file name if not specifed.
+
 
 See also: [`read10x`](@ref), [`read10x_matrix`](@ref), [`read10x_features`](@ref)
 """
 function read10x_barcodes(io, barcodetype=Vector; kwargs...)
-	_barcodes(barcodetype, _read10x_barcodes(io;kwargs...))
+	_barcodes(barcodetype, _read10x_barcodes_autodetect(io;kwargs...))
 end
 
 
@@ -271,7 +282,6 @@ function _read10x_features(io::HDF5.File)
 	cols = vcat("id", "name", "feature_type", read(featureGroup["_all_tag_keys"]))
 	(; map(x->(Symbol(x), read(featureGroup,x)), cols)...)
 end
-
 function _read10x_features(io; delim='\t')
 	featuresRaw = readdlm(io, delim, String)
 	@assert size(featuresRaw,2)>=2
@@ -281,25 +291,31 @@ function _read10x_features(io; delim='\t')
 	feature_type=size(featuresRaw,2)>=3 ? featuresRaw[:,3] : fill("Gene Expression",length(id))
 	(;id, name, feature_type)
 end
+_read10x_features(fn::AbstractString; kwargs...) = _open(fn) do io
+	_read10x_features(io; kwargs...)
+end
 
 
-function _read10x_features(fn::AbstractString; guessfilename=true, kwargs...)
-	if guessfilename
-		fn = _guessfilename(fn, ("features","genes"), "feature")
-	end
-
-	_open(fn) do io
-		_read10x_features(io; _delimkwarg(fn)..., kwargs...)
+_read10x_features_autodetect(io;kwargs...) = _read10x_features(io;kwargs...)
+function _read10x_features_autodetect(filename::AbstractString; kwargs...)
+	if _ish5(filename)
+		_read10x_features(filename; kwargs...)
+	else
+		_read10x_features_triplet(filename; kwargs...)
 	end
 end
+function _read10x_features_triplet(filename; guess=guessfeaturefilename, kwargs...)
+	fn = _filename(guess,filename)
+	_read10x_features(fn; delim=_delim(fn), kwargs...)
+end
+
 
 
 _features(fun, f) = fun(f)
 
 
-
 """
-	read10x_features(io, [featuretype=NamedTuple]; delim, guessfilename=true)
+	read10x_features(io, [featuretype=NamedTuple]; [guess, delim])
 
 Read 10x features.
 `io` can be a filename (".h5", ".tsv(.gz)", ".csv(.gz)" or ".mtx(.gz)") or an `HDF5.File` handle or an IO object.
@@ -310,14 +326,15 @@ The returned annotation table for features is of the type `featuretype` and can 
 * Other table types that can be constructed from NamedTuples.
 * A user defined function/type constructor taking a NamedTuple as input.
 
-The column delimiter `delim` will be guessed from the file name if not specifed.
+If the input filename is "matrix.mtx(.gz)", then the same folder will be searched for a matching feature file.
+Set `guess=nothing` to disable. `guess` can also be set to a function taking the matrix file path as input and returning the corresponding feature file path.
 
-If `guessfilename` is true and the input filename is "matrix.mtx(.gz)", then the same folder will be searched for a matching feature file.
+The column delimiter `delim` will be detected from the file name if not specifed.
 
 See also: [`read10x`](@ref), [`read10x_matrix`](@ref), [`read10x_barcodes`](@ref)
 """
 function read10x_features(io, featuretype=NamedTuple; kwargs...)
-	_features(featuretype, _read10x_features(io;kwargs...))
+	_features(featuretype, _read10x_features_autodetect(io;kwargs...))
 end
 
 
@@ -329,25 +346,43 @@ function _read10x(io::HDF5.File)
 	X = _read10x_matrix(io) # read matrix last to return quicker if features/barcodes error
 	X,f,b
 end
-function _read10x(filename::AbstractString; kwargs...)
-	if lowercase(splitext(filename)[2]) == ".h5"
-		h5open(filename) do io # only open the file once
-			_read10x(io; kwargs...)
-		end
+_read10x(filename::AbstractString) = h5open(_read10x, filename)
+
+function _read10x(matrix_filename::AbstractString, features_filename::AbstractString, barcodes_filename::AbstractString; kwargs...)
+	f = _read10x_features(features_filename; delim=_delim(features_filename), kwargs...)
+	b = _read10x_barcodes(barcodes_filename; delim=_delim(barcodes_filename), kwargs...)
+	X = _read10x_matrix(matrix_filename) # read matrix last to return quicker if features/barcodes error
+	X,f,b
+end
+
+
+
+_filename(f::AbstractString, ::Any) = f
+_filename(f, filename::AbstractString) = f(filename)
+_filename(::Nothing, filename::AbstractString) = filename
+
+
+_read10x_autodetect(io::HDF5.File; kwargs...) = _read10x(io; kwargs...)
+function _read10x_autodetect(filename::AbstractString; kwargs...)
+	if _ish5(filename)
+		_read10x(filename; kwargs...)
 	else
-		# TODO: check that filename is matrix.mtx.(.gz) because otherwise we cannot find features/barcodes
-		_ismatrixmtx(filename) || error("""Expected filename to end with ".h5" or be "matrix.mtx(.gz)".""")
-		f = _read10x_features(filename; kwargs...)
-		b = _read10x_barcodes(filename; kwargs...)
-		X = _read10x_matrix(filename) # read matrix last to return quicker if features/barcodes error
-		X,f,b
+		_read10x_triplet(filename; kwargs...)
 	end
+end
+function _read10x_triplet(filename; features=guessfeaturefilename, barcodes=guessbarcodefilename, kwargs...)
+	features = _filename(features, filename)
+	barcodes = _filename(barcodes, filename)
+	features == filename && error("Failed to guess feature file name")
+	barcodes == filename && error("Failed to guess barcode file name")
+	_read10x(filename, features, barcodes; kwargs...)
 end
 
 
 
 """
-	read10x(io, [matrixtype=SparseMatrixCSC{Int,Int}, featuretype=NamedTuple, barcodetype=Vector]; transpose=false, delim)
+	read10x(io, [matrixtype=SparseMatrixCSC{Int,Int}, featuretype=NamedTuple, barcodetype=Vector];
+	        transpose=false, [features, barcodes, delim])
 
 Read 10x (CellRanger) count matrix and annotations.
 `io` can be filename (".h5" or "matrix.mtx(.gz)") or an `HDF5.File` handle.
@@ -364,16 +399,23 @@ The returned annotations for barcodes/features are of types `barcodetype`/`featu
 * Vector - For barcodes only.
 * DataFrame - See `DataFrames` package.
 * Other table types that can be constructed from NamedTuples.
-* A user defined function/type constructor taking a NamedTuple as input.
+* A user defined function/type constructor taking a NamedTuple (features) or Vector (barcodes) as input.
 
 If `transpose` is `true`, the data matrix will be read transposed.
 
-The column delimiter `delim` is only used for features/barcodes.(tsv|csv) files, and will be guessed from the file name if not specifed.
+`features` and `barcodes` are only allowed for `mtx(.gz)` files.
+They can be used to specify the file paths for `features`/`barcodes`.
+By default, the file paths will be autodetected.
+Set to `nothing` to disable.
+They can also be set to functions taking the matrix file path as input and returning the corresponding barcode/feature file path.
+
+The column delimiter `delim` is only used for features/barcodes.(tsv|csv) files, and will be detected from the file name if not specifed.
 
 See also: [`read10x_matrix`](@ref), [`read10x_barcodes`](@ref), [`read10x_features`](@ref)
 """
-function read10x(io, matrixtype=SparseMatrixCSC{Int,Int}, featuretype=NamedTuple, barcodetype=Vector; transpose=false, kwargs...)
-	(I,J,V,P,N), f, b = _read10x(io; kwargs...)
+function read10x(io, matrixtype=SparseMatrixCSC{Int,Int}, featuretype=NamedTuple, barcodetype=Vector;
+                 transpose=false, kwargs...)
+	(I,J,V,P,N), f, b = _read10x_autodetect(io; kwargs...)
 
 	i = findfirst(col->length(col)!=P, values(f))
 	@assert i===nothing "Inconsistent number of features, expected $P rows, got $(length(f[i]))."

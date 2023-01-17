@@ -95,14 +95,14 @@ end
 
         @testset "mtx_extra" begin
             @test read10x_features(m_fn) == expected_features_mtx
-            @test_throws AssertionError read10x_features(m_fn; guessfilename=false)
+            @test_throws AssertionError read10x_features(m_fn; guess=nothing)
             @test read10x_features(f_fn) == expected_features_mtx
-            @test read10x_features(f_fn; guessfilename=false).id == expected_feature_ids
+            @test read10x_features(f_fn; guess=nothing).id == expected_feature_ids
 
             @test read10x_barcodes(m_fn) == expected_barcodes
-            @test read10x_barcodes(m_fn; guessfilename=false) == mtx_raw # garbage, but we want to test that guessfilename=false works
+            @test read10x_barcodes(m_fn; guess=nothing) == mtx_raw # garbage, but we want to test that guess=nothing works
             @test read10x_barcodes(b_fn) == expected_barcodes
-            @test read10x_barcodes(b_fn; guessfilename=false) == expected_barcodes
+            @test read10x_barcodes(b_fn; guess=nothing) == expected_barcodes
         end
 
         expected_rawcsc = (findnz(sparse(expected_mat))..., size(expected_mat)...)
@@ -181,8 +181,8 @@ end
                 @test_throws ErrorException read10x_features(m_unzipped_fn)
                 @test_throws ErrorException read10x_barcodes(m_unzipped_fn)
 
-                @test_throws AssertionError read10x_features(m_unzipped_fn; guessfilename=false)
-                @test read10x_barcodes(m_unzipped_fn; guessfilename=false) == mtx_raw # garbage, but we want to test that guessfilename=false works
+                @test_throws AssertionError read10x_features(m_unzipped_fn; guess=nothing)
+                @test read10x_barcodes(m_unzipped_fn; guess=nothing) == mtx_raw # garbage, but we want to test that guess=nothing works
 
                 gunzip(f_fn, f_unzipped_fn)
                 gunzip(b_fn, b_unzipped_fn)
@@ -200,8 +200,8 @@ end
                 @test read10x_features(m_unzipped_fn) == expected_features_mtx
                 @test read10x_barcodes(m_unzipped_fn) == expected_barcodes
 
-                @test read10x_features(f_unzipped_fn; guessfilename=false) == expected_features_mtx
-                @test read10x_barcodes(b_unzipped_fn; guessfilename=false) == expected_barcodes
+                @test read10x_features(f_unzipped_fn; guess=nothing) == expected_features_mtx
+                @test read10x_barcodes(b_unzipped_fn; guess=nothing) == expected_barcodes
             end
         end
 
@@ -234,13 +234,13 @@ end
         @test read10x_matrix(m_fn; transpose=true) == expected_mat'
 
         @test read10x_features(m_fn) == expected_features
-        @test_throws AssertionError read10x_features(m_fn; guessfilename=false)
+        @test_throws AssertionError read10x_features(m_fn; guess=nothing)
         @test read10x_features(g_fn) == expected_features
-        @test read10x_features(g_fn; guessfilename=false) == expected_features
+        @test read10x_features(g_fn; guess=nothing) == expected_features
 
         @test read10x_barcodes(m_fn) == expected_barcodes
-        @test read10x_barcodes(m_fn; guessfilename=false) == mtx_raw # garbage, but we want to test that guessfilename=false works
+        @test read10x_barcodes(m_fn; guess=nothing) == mtx_raw # garbage, but we want to test that guess=nothing works
         @test read10x_barcodes(b_fn) == expected_barcodes
-        @test read10x_barcodes(b_fn; guessfilename=false) == expected_barcodes
+        @test read10x_barcodes(b_fn; guess=nothing) == expected_barcodes
     end
 end
