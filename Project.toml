@@ -1,7 +1,7 @@
 name = "SingleCell10x"
 uuid = "eddce310-d14b-4c2d-aa06-cfe9e2f7af98"
 authors = ["Rasmus Henningsson <rasmus.henningsson@med.lu.se>"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
