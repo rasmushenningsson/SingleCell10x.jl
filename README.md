@@ -12,6 +12,8 @@ The count matrix can be transposed at load time and the data types of the matrix
 More information on the file formats can be found in the [10x Genomics offical documentation](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/output/overview).
 Note that this is an independent implementation - any bugs you find should be reported here, not to 10x Genomics.
 
+To analyze your Single Cell expression data in Julia, you can use [SingleCellProjections.jl](https://github.com/rasmushenningsson/SingleCellProjections.jl).
+
 
 ## Documentation
 The package should hopefully be straightforward to use.
