@@ -1,7 +1,44 @@
-const RawCSC{Tv,Ti} = Tuple{Vector{Ti},Vector{Ti},Vector{Tv},Int,Int}
-_transpose((I,J,V,P,N)::RawCSC) = (J,I,V,N,P)
+struct AutoType end # Placeholder for using whatever eltype is stored in a file
+
+struct RawIJV{Tv,Ti}
+	I::Vector{Ti}
+	J::Vector{Ti}
+	V::Vector{Tv}
+	P::Int
+	N::Int
+end
+
+Base.:(==)(A::RawIJV, B::RawIJV) = A.P == B.P && A.N == B.N && A.I == B.I && A.J==B.J && A.V==B.V
+
+
+LinearAlgebra.adjoint(X::RawIJV) = RawIJV(X.J, X.I, X.V, X.N, X.P)
+
+
+Base.convert(::Type{SparseMatrixCSC{Tv,Ti}}, X::RawIJV{Tv,Ti}) where {Tv,Ti} = sparse(X.I, X.J, X.V, X.P, X.N)
+Base.convert(::Type{SparseMatrixCSC{Tv}}, X::RawIJV{Tv,Ti}) where {Tv,Ti} = sparse(X.I, X.J, X.V, X.P, X.N)
+Base.convert(::Type{SparseMatrixCSC}, X::RawIJV{Tv,Ti}) where {Tv,Ti} = sparse(X.I, X.J, X.V, X.P, X.N)
+
+Base.convert(::Type{RawIJV{Tv,Ti}}, X::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = RawIJV(findnz(X)...,size(X)...)
+Base.convert(::Type{RawIJV{Tv}}, X::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = RawIJV(findnz(X)...,size(X)...)
+Base.convert(::Type{RawIJV}, X::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = RawIJV(findnz(X)...,size(X)...)
+
+
+Base.convert(::Type{Td}, X::Adjoint) where Td<:RawIJV = convert(Td, X.parent)'
+
+function Base.convert(::Type{Matrix{T}}, X::RawIJV{T}) where T
+	@assert length(X.I)==length(X.J)==length(X.V)
+	Y = zeros(T, X.P, X.N)
+	for (i,j,v) in zip(X.I, X.J, X.V)
+		Y[i,j] += v
+	end
+	Y
+end
+Base.convert(::Type{Matrix}, X::RawIJV{T}) where T = convert(Matrix{T},X)
+
+
 
 _ish5(fn) = lowercase(splitext(fn)[2]) == ".h5"
+
 
 
 """
@@ -32,58 +69,33 @@ end
 
 
 
-
-function _matrix(::Type{RawCSC{Tv,Ti}}, (I,J,V,P,N)) where {Tv,Ti}
-	convert(Vector{Ti},I), convert(Vector{Ti},J), convert(Vector{Tv},V), convert(Int,P), convert(Int,N)
-end
-
-_matrix(::Type{RawCSC{Tv}}, X) where Tv = _matrix(RawCSC{Tv,Int}, X)
-_matrix(::Type{RawCSC}, X) = _matrix(RawCSC{Int,Int}, X)
-
-
-_matrix(::Type{SparseMatrixCSC{Tv,Ti}}, X) where {Tv,Ti} = sparse(_matrix(RawCSC{Tv,Ti}, X)...)
-_matrix(::Type{SparseMatrixCSC{Tv}}, X) where Tv = sparse(_matrix(RawCSC{Tv}, X)...)
-_matrix(::Type{SparseMatrixCSC}, X) = sparse(_matrix(RawCSC, X)...)
-
-
-function _matrix(::Type{Matrix{T}}, (I,J,V,P,N)::RawCSC{Tv}) where {T,Tv}
-	@assert length(I)==length(J)==length(V)
-	Y = zeros(T, P, N)
-	for (i,j,v) in zip(I,J,V)
-		Y[i,j] += v
-	end
-	Y
-end
-_matrix(::Type{Matrix}, X::RawCSC{Tv}) where Tv = _matrix(Matrix{Tv}, X)
+_matrix(::Type{T}, X, transpose::Bool) where T = convert(T, transpose ? X' : X)
 
 
 
-# Fallback for user-defined sinks - f should be a function or constructor taking I,J,V,P,N
-_matrix(f, X) = f(X...)
-
-
-function _matrix(matrixtype, X, transpose::Bool)
-	_matrix(matrixtype, transpose ? _transpose(X) : X)
-end
-
-
-
-
-
-function _read10x_matrix(io::HDF5.File)::RawCSC
+function _read10x_matrix(io::HDF5.File, ::Type{Ti}, ::Type{Tv}) where {Ti,Tv}
 	P,N,_ = _read10x_matrix_metadata(io)
 	matrixGroup = HDF5.root(io)["matrix"]
 
-	I = read(matrixGroup["indices"]) .+ 1 # 0-based to 1-based
 	indptr = read(matrixGroup["indptr"])
 	@assert length(indptr)==N+1
-	J = zeros(Int,length(I))
-	for k=1:N
-		J[ indptr[k]+1:indptr[k+1] ] .= k
-	end
-	V = read(matrixGroup["data"])
+	rowval = read(matrixGroup["indices"])
+	nzval = read(matrixGroup["data"])
+	@assert length(rowval)==length(nzval)
 
-	I,J,V,P,N
+	# convert (NB: this is a no-op if already of the correct type)
+	if Ti !== AutoType
+		indptr = convert(Vector{Ti}, indptr)
+		rowval = convert(Vector{Ti}, rowval)
+	end
+	if Tv !== AutoType
+		nzval = convert(Vector{Tv}, nzval)
+	end
+
+	rowval .+= 1 # 0-based to 1-based
+	indptr .+= 1 # 0-based to 1-based
+
+	SparseMatrixCSC(P, N, indptr, rowval, nzval)
 end
 
 
@@ -116,18 +128,31 @@ function _read_mtx_header(io)
 end
 
 
-function _read10x_matrix(io)::RawCSC
-	Tv,P,N,nz = _read_mtx_header(io)
+function _read10x_matrix(io, ::Type{Ti}, ::Type{Tv}) where {Ti,Tv}
+	Tv_file,P,N,nz = _read_mtx_header(io)
 
-	I = zeros(Int,nz)
-	J = zeros(Int,nz)
-	V = zeros(Tv,nz)
+	I = zeros(Ti !== AutoType ? Ti : Int, nz)
+	J = zeros(Ti !== AutoType ? Ti : Int, nz)
+	V = zeros(Tv !== AutoType ? Tv : Tv_file, nz)
 	_read_mtx_lines!(I,J,V,nz,io)
 
-	I,J,V,P,N
+	RawIJV(I,J,V,P,N)
 end
 
-_read10x_matrix(fn::AbstractString) = _open(_read10x_matrix, fn)
+_read10x_matrix(fn::AbstractString, ::Type{Ti}, ::Type{Tv}) where {Ti,Tv} = _open(x->_read10x_matrix(x,Ti,Tv), fn)
+
+
+
+_read10x_matrix(::Type{SparseMatrixCSC{Tv,Ti}}, args...) where {Tv,Ti} = _read10x_matrix(args..., Ti, Tv)
+_read10x_matrix(::Type{SparseMatrixCSC{Tv}}, args...) where Tv = _read10x_matrix(args..., AutoType, Tv)
+_read10x_matrix(::Type{SparseMatrixCSC}, args...) = _read10x_matrix(args..., AutoType, AutoType)
+
+_read10x_matrix(::Type{RawIJV{Tv,Ti}}, args...) where {Tv,Ti} = _read10x_matrix(args..., Ti, Tv)
+_read10x_matrix(::Type{RawIJV{Tv}}, args...) where Tv = _read10x_matrix(args..., AutoType, Tv)
+_read10x_matrix(::Type{RawIJV}, args...) = _read10x_matrix(args..., AutoType, AutoType)
+
+_read10x_matrix(::Type{Matrix{Tv}}, args...) where Tv = _read10x_matrix(args..., AutoType, Tv)
+_read10x_matrix(::Type{Matrix}, args...) = _read10x_matrix(args..., AutoType, AutoType)
 
 
 
@@ -139,17 +164,15 @@ Read 10x (CellRanger) count matrix.
 
 The returned count matrix is of type `matrixtype` and can be one of:
 * `SparseMatrixCSC` - The standard sparse matrix format in Julia, found in `SparseArrays`.
-* `RawCSC` - A tuple of `I,J,V,P,N`, suitable for passing to the `sparse` function in `SparseArrays`.
 * `Matrix` - A standard dense matrix.
-* A user defined function/type constructor taking `I,J,V,P,N` as input.
 
 If `transpose` is `true`, the data matrix will be read transposed.
 
 See also: [`read10x`](@ref), [`read10x_barcodes`](@ref), [`read10x_features`](@ref)
 """
-function read10x_matrix(io, matrixtype=SparseMatrixCSC{Int,Int}; transpose=false)
-	X = _read10x_matrix(io)
-	_matrix(matrixtype,X,transpose)
+function read10x_matrix(io, ::Type{T}=SparseMatrixCSC{Int,Int}; transpose=false) where T
+	X = _read10x_matrix(T, io)
+	_matrix(T,X,transpose)
 end
 
 
@@ -337,18 +360,18 @@ end
 
 
 
-function _read10x(io::HDF5.File)
+function _read10x(::Type{T}, io::HDF5.File) where T
 	f = _read10x_features(io)
 	b = _read10x_barcodes(io)
-	X = _read10x_matrix(io) # read matrix last to return quicker if features/barcodes error
+	X = _read10x_matrix(T, io) # read matrix last to return quicker if features/barcodes error
 	X,f,b
 end
-_read10x(filename::AbstractString) = h5open(_read10x, filename)
+_read10x(::Type{T}, filename::AbstractString) where T = h5open(x->_read10x(T,x), filename)
 
-function _read10x(matrix_filename::AbstractString, features_filename::AbstractString, barcodes_filename::AbstractString; kwargs...)
+function _read10x(::Type{T}, matrix_filename::AbstractString, features_filename::AbstractString, barcodes_filename::AbstractString; kwargs...) where T
 	f = _read10x_features(features_filename; delim=_delim(features_filename), kwargs...)
 	b = _read10x_barcodes(barcodes_filename; delim=_delim(barcodes_filename), kwargs...)
-	X = _read10x_matrix(matrix_filename) # read matrix last to return quicker if features/barcodes error
+	X = _read10x_matrix(T, matrix_filename) # read matrix last to return quicker if features/barcodes error
 	X,f,b
 end
 
@@ -359,20 +382,20 @@ _filename(f, filename::AbstractString) = f(filename)
 _filename(::Nothing, filename::AbstractString) = filename
 
 
-_read10x_autodetect(io::HDF5.File; kwargs...) = _read10x(io; kwargs...)
-function _read10x_autodetect(filename::AbstractString; kwargs...)
+_read10x_autodetect(::Type{T}, io::HDF5.File; kwargs...) where T = _read10x(T, io; kwargs...)
+function _read10x_autodetect(::Type{T}, filename::AbstractString; kwargs...) where T
 	if _ish5(filename)
-		_read10x(filename; kwargs...)
+		_read10x(T, filename; kwargs...)
 	else
-		_read10x_triplet(filename; kwargs...)
+		_read10x_triplet(T, filename; kwargs...)
 	end
 end
-function _read10x_triplet(filename; features=guessfeaturefilename, barcodes=guessbarcodefilename, kwargs...)
+function _read10x_triplet(::Type{T}, filename; features=guessfeaturefilename, barcodes=guessbarcodefilename, kwargs...) where T
 	features = _filename(features, filename)
 	barcodes = _filename(barcodes, filename)
 	features == filename && error("Failed to guess feature file name")
 	barcodes == filename && error("Failed to guess barcode file name")
-	_read10x(filename, features, barcodes; kwargs...)
+	_read10x(T, filename, features, barcodes; kwargs...)
 end
 
 
@@ -387,9 +410,7 @@ NB: If the input filename is "[prefix]matrix.mtx[.gz]", the same folder will be 
 
 The returned count matrix is of type `matrixtype` and can be one of:
 * `SparseMatrixCSC` - The standard sparse matrix format in Julia, found in `SparseArrays`.
-* `RawCSC` - A tuple of `I,J,V,P,N`, suitable for passing to the `sparse` function in `SparseArrays`.
 * `Matrix` - A standard dense matrix.
-* A user defined function/type constructor taking `I,J,V,P,N` as input.
 
 The returned annotations for barcodes/features are of types `barcodetype`/`featuretype` and can be one of:
 * NamedTuple - With column names as keys and column vectors as values.
@@ -410,14 +431,16 @@ The column delimiter `delim` is only used for features/barcodes.(tsv|csv) files,
 
 See also: [`read10x_matrix`](@ref), [`read10x_barcodes`](@ref), [`read10x_features`](@ref)
 """
-function read10x(io, matrixtype=SparseMatrixCSC{Int,Int}, featuretype=NamedTuple, barcodetype=Vector;
-                 transpose=false, kwargs...)
-	(I,J,V,P,N), f, b = _read10x_autodetect(io; kwargs...)
+function read10x(io, ::Type{T}=SparseMatrixCSC{Int,Int}, featuretype=NamedTuple, barcodetype=Vector;
+                 transpose=false, kwargs...) where T
+	X, f, b = _read10x_autodetect(T, io; kwargs...)
+
+	P,N = X isa RawIJV ? (X.P,X.N) : size(X)
 
 	i = findfirst(col->length(col)!=P, values(f))
 	@assert i===nothing "Inconsistent number of features, expected $P rows, got $(length(f[i]))."
 	N2 = length(b)
 	@assert N2 == N "Inconsistent number of barcodes, expected $N rows, got $N2."
 
-	_matrix(matrixtype,(I,J,V,P,N),transpose), _features(featuretype,f), _barcodes(barcodetype,b)
+	_matrix(T,X,transpose), _features(featuretype,f), _barcodes(barcodetype,b)
 end
