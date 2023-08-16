@@ -1,7 +1,6 @@
 module SingleCell10x
 
 export
-	RawCSC,
 	read10x_matrix,
 	read10x_matrix_metadata,
 	read10x_features,
@@ -10,6 +9,7 @@ export
 
 using DelimitedFiles
 using HDF5
+using LinearAlgebra
 using SparseArrays
 using CodecZlib
 

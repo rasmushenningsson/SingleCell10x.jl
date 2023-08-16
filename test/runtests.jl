@@ -1,4 +1,5 @@
 using SingleCell10x
+using SingleCell10x: RawIJV
 using Test
 
 using HDF5
@@ -6,6 +7,7 @@ using CodecZlib
 using DelimitedFiles
 using SparseArrays
 using DataFrames
+
 
 isgz(fn) = lowercase(splitext(fn)[2])==".gz"
 _open(f, fn) = open(fn) do io
@@ -52,11 +54,13 @@ end
 
             X,f,b = read10x(fn)
             @test X == expected_mat
+            @test X isa SparseMatrixCSC{Int,Int}
             @test f == expected_features
             @test b == expected_barcodes
 
             X,f,b = read10x(fn; transpose=true)
             @test X == expected_mat'
+            @test X isa SparseMatrixCSC{Int,Int}
             @test f == expected_features
             @test b == expected_barcodes
 
@@ -74,11 +78,13 @@ end
             h5open(joinpath(base,filenames[1])) do h5
                 X,f,b = read10x(h5)
                 @test X == expected_mat
+                @test X isa SparseMatrixCSC{Int,Int}
                 @test f == expected_features_h5
                 @test b == expected_barcodes
 
                 X,f,b = read10x(h5; transpose=true)
                 @test X == expected_mat'
+                @test X isa SparseMatrixCSC{Int,Int}
                 @test f == expected_features_h5
                 @test b == expected_barcodes
 
@@ -105,17 +111,17 @@ end
             @test read10x_barcodes(b_fn; guess=nothing) == expected_barcodes
         end
 
-        expected_rawcsc = (findnz(sparse(expected_mat))..., size(expected_mat)...)
-        expected_rawcsc_t = (expected_rawcsc[2],expected_rawcsc[1],expected_rawcsc[3],expected_rawcsc[5],expected_rawcsc[4])
+        expected_rawijv = RawIJV(findnz(sparse(expected_mat))..., size(expected_mat)...)
+        expected_rawijv_t = RawIJV(expected_rawijv.J, expected_rawijv.I, expected_rawijv.V, expected_rawijv.N, expected_rawijv.P)
 
-        matrix_sinks = (RawCSC, SparseMatrixCSC, SparseMatrixCSC{Int32}, SparseMatrixCSC{Float64}, SparseMatrixCSC{Float64,Int32}, Matrix, Matrix{Int32}, Matrix{Float64}, sparse)
+        matrix_sinks = (RawIJV, RawIJV{Float64}, RawIJV{Float64,Int}, SparseMatrixCSC, SparseMatrixCSC{Int32}, SparseMatrixCSC{Float64}, SparseMatrixCSC{Float64,Int32}, Matrix, Matrix{Int32}, Matrix{Float64})
         @testset "matrix_$(case)_$sink" for (case,filename) in zip(("h5","mtx"), filenames), sink in matrix_sinks
             fn = joinpath(base,filename)
 
             X = read10x_matrix(fn, sink)
-            @test X isa (sink==sparse ? SparseMatrixCSC : sink)
-            if X isa RawCSC
-                @test X==expected_rawcsc
+            @test X isa sink
+            if X isa RawIJV
+                @test X==expected_rawijv
             else
                 @test X==expected_mat
             end
@@ -124,9 +130,9 @@ end
             @test X==X2
 
             X = read10x_matrix(fn, sink; transpose=true)
-            @test X isa (sink==sparse ? SparseMatrixCSC : sink)
-            if X isa RawCSC
-                @test X==expected_rawcsc_t
+            @test X isa sink
+            if X isa RawIJV
+                @test X==expected_rawijv_t
             else
                 @test X==expected_mat'
             end
@@ -145,7 +151,7 @@ end
             @test b isa (sink isa Function ? Vector : sink)
             @test b==ans
 
-            X,f,b = read10x(fn, RawCSC, NamedTuple, sink)
+            X,f,b = read10x(fn, RawIJV, NamedTuple, sink)
             @test b isa (sink isa Function ? Vector : sink)
             @test b==ans
         end
@@ -162,7 +168,7 @@ end
             @test f isa (sink isa Function ? NamedTuple : sink)
             @test f==ans2
 
-            X,f,b = read10x(fn, RawCSC, sink)
+            X,f,b = read10x(fn, RawIJV, sink)
             @test f isa (sink isa Function ? NamedTuple : sink)
             @test f==ans2
         end
@@ -172,7 +178,6 @@ end
                 m_unzipped_fn = joinpath(dir, string(prefix,basename(splitext(m_fn)[1])))
                 f_unzipped_fn = joinpath(dir, string(prefix,basename(splitext(f_fn)[1])))
                 b_unzipped_fn = joinpath(dir, string(prefix,basename(splitext(b_fn)[1])))
-                @show m_unzipped_fn
                 gunzip(m_fn, m_unzipped_fn)
 
                 @test read10x_matrix(m_unzipped_fn) == expected_mat
