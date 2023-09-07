@@ -13,7 +13,7 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 [compat]
 CodecZlib = "0.7"
 DelimitedFiles = "1"
-HDF5 = "0.16"
+HDF5 = "0.16, 0.17"
 julia = "1.8"
 
 [extras]
