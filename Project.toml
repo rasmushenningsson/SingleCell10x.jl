@@ -1,7 +1,7 @@
 name = "SingleCell10x"
 uuid = "eddce310-d14b-4c2d-aa06-cfe9e2f7af98"
 authors = ["Rasmus Henningsson <rasmus.henningsson@med.lu.se>"]
-version = "0.2.1"
+version = "0.2.2"
 
 [deps]
 CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
@@ -14,6 +14,8 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 CodecZlib = "0.7"
 DelimitedFiles = "1"
 HDF5 = "0.16, 0.17"
+LinearAlgebra = "1"
+SparseArrays = "1"
 julia = "1.8"
 
 [extras]
