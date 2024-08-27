@@ -72,6 +72,27 @@ end
 _matrix(::Type{T}, X, transpose::Bool) where T = convert(T, transpose ? X' : X)
 
 
+function _fix_sparse_buffers!(P,N,indptr,rowval,nzval)
+	@assert indptr[1] == 1
+	@assert indptr[end] == length(rowval)+1
+
+	for j in 1:N
+		rng = indptr[j]:indptr[j+1]-1
+		isempty(rng) && continue
+
+		rowval_j = @view rowval[rng]
+		if !issorted(rowval_j) # These are normally sorted - but I've found cellranger(?) .h5 files in the wild where they are not. So better check or the data will be corrupt.
+			nzval_j = @view nzval[rng]
+
+			perm = sortperm(rowval_j)
+			rowval_j .= rowval_j[perm]
+			nzval_j .= nzval_j[perm]
+		end
+		@assert rowval_j[1] >= 1
+		@assert rowval_j[end] <= P
+	end
+end
+
 
 function _read10x_matrix(io::HDF5.File, ::Type{Ti}, ::Type{Tv}) where {Ti,Tv}
 	P,N,_ = _read10x_matrix_metadata(io)
@@ -79,6 +100,7 @@ function _read10x_matrix(io::HDF5.File, ::Type{Ti}, ::Type{Tv}) where {Ti,Tv}
 
 	indptr = read(matrixGroup["indptr"])
 	@assert length(indptr)==N+1
+	@assert issorted(indptr)
 	rowval = read(matrixGroup["indices"])
 	nzval = read(matrixGroup["data"])
 	@assert length(rowval)==length(nzval)
@@ -94,6 +116,8 @@ function _read10x_matrix(io::HDF5.File, ::Type{Ti}, ::Type{Tv}) where {Ti,Tv}
 
 	rowval .+= 1 # 0-based to 1-based
 	indptr .+= 1 # 0-based to 1-based
+
+	_fix_sparse_buffers!(P, N, indptr, rowval, nzval)
 
 	SparseMatrixCSC(P, N, indptr, rowval, nzval)
 end

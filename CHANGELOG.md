@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+* Fix bug when loading strange .h5 and .mtx files that are not sorted.
+
 ## [0.2.1] - 2023-09-13
 
 ### Fixed
