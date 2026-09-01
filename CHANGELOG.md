@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-01
+
 ### Fixed
 
 * Fix bug when loading strange .h5 and .mtx files that are not sorted.
+* Handle .h5 files that doesn't have `matrix/features/_all_tag_keys`
+
+## [0.2.2] - 2024-01-23
+
+### Fixed
+
+* Fix stdlib compat
 
 ## [0.2.1] - 2023-09-13
 
