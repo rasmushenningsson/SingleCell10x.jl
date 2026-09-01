@@ -323,7 +323,19 @@ end
 
 function _read10x_features(io::HDF5.File)
 	featureGroup = HDF5.root(io)["matrix"]["features"]
-	cols = vcat("id", "name", "feature_type", read(featureGroup["_all_tag_keys"]))
+
+	cols = ["id", "name", "feature_type"]
+
+	if haskey(featureGroup, "_all_tag_keys")
+		# standard cellranger output has this
+		append!(cols, read(featureGroup["_all_tag_keys"]))
+	else
+		# otherwise take all columns listed in featureGroup
+		append!(cols, keys(featureGroup))
+		filter!(!startswith('_'), cols) # these are internal
+		unique!(cols) # get rid of duplicates, ensuring that id, name, feature_type are the first cols
+	end
+
 	(; map(x->(Symbol(x), read(featureGroup,x)), cols)...)
 end
 function _read10x_features(io; delim='\t')
